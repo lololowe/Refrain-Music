@@ -162,12 +162,17 @@ musicjson内容例如：
 
 ### 第三级依赖的接口代理
 
-浏览器直连 `c.y.qq.com` 会被 CORS 拦住，且无法携带必需的 `Referer`，因此第三级通过一个腾讯云 EdgeOne 边缘函数代理转发，函数源码在 [edge/qq-proxy/edge-functions/qq/index.js](edge/qq-proxy/edge-functions/qq/index.js)。
+浏览器直连 `c.y.qq.com` 会被 CORS 拦住，且无法携带必需的 `Referer`，因此第三级通过一个腾讯云 EdgeOne 边缘函数代理转发，函数源码在 [edge-functions/qq/index.js](edge-functions/qq/index.js)，与整站同属一个项目：一次部署同时得到静态站点和 `/qq` 接口。
 
 - **路由**：`/qq`，参数 `act=search&w=关键词`、`act=lyric&songmid=xxx`、`act=probe`（自诊断，返回两种签名前缀的上游响应）
-- **改歌名歌手不匹配时**：匹配策略（歌名归一化 + 歌手交集）在 `localEngine.js` 的 `qqPick` 里
-- **部署**：装好 EdgeOne CLI 后，在 `edge/qq-proxy` 目录执行 `edgeone makers deploy . -n <项目名> --json`；函数必须放在 `edge-functions/<名>/index.js` 并导出 `onRequest`，运行时是 V8（无 Node 内置模块、无 `btoa`/`escape`，`Response.json()` 也不可用）
+- **匹配策略**：歌名归一化后必须完全相等才采纳（歌手对不上时降级采纳同名结果），实现在 `localEngine.js` 的 `qqPick` / `qqNormName` 里
+- **部署**：装好 EdgeOne CLI 后在**仓库根目录**执行 `edgeone makers deploy . -n <项目名> --json`；函数必须放在根目录的 `edge-functions/<名>/index.js` 并导出 `onRequest`（放到子目录里不会被扫描到，构建产物就只有静态文件、没有函数），运行时是 V8（无 Node 内置模块、无 `btoa`/`escape`，`Response.json()` 也不可用）
 - **必须绑定自定义域名**：EdgeOne 的默认域名带 3 小时 token 预览保护，播放器发出的跨站 `fetch` 携带不上校验 Cookie，会稳定返回 401；把自己的域名 CNAME 到部署域名后才是可用的程序接口
-- **前端地址**：改成你自己的代理域名，[js/localEngine.js](js/localEngine.js) 顶部的 `QQ_PROXY`（形如 `https://你的域名/qq`）；函数里的 CORS 白名单正则 `TRUSTED` 也需要同步改成你的站点来源
+- **前端地址**：默认 `https://music.lololowe.com/qq`，见 [js/localEngine.js](js/localEngine.js) 的 `QQ_PROXY`；想改指自己的代理，在 `config.js` 里写 `window.qq_proxy = 'https://你的域名/qq'` 即可，并同步把函数里的 CORS 白名单正则 `TRUSTED` 改成你的站点来源
 
-未配置代理时第三级会自动失败并跳过，不影响前两级和本地播放。
+### 部署前必读的两个坑
+
+- **`.edgeone/project.json` 会缓存项目名**：不带 `-n` 时 CLI 沿用它，于是「在哪个目录跑」和「推到哪个项目」这两件事会各自错一半 —— 实际踩过一次：在仓库根目录跑了 `edgeone makers deploy`，整个网站被推进了另一个（代理专用）项目，还把该项目里有函数的部署顶掉了。根目录的 `.edgeone/` 只是构建产物加缓存，删掉无损失。
+- **构建不读 `.gitignore`**：它只排除 `.edgeone` / `.env` / `.git` / `.gitignore` 这四项，当前目录下其余文件一律当静态资源上传并公开可访问。不想被发布的目录（比如第三方参考代码）必须挪出仓库目录树，光写 `.gitignore` 挡不住部署。
+
+部署完可以这样自检：`https://你的域名/qq?act=search&w=test` 应返回 JSON；`https://你的域名/qq` 若返回的是页面 HTML 而不是 `unknown act` 的错误 JSON，说明函数没被构建进去（检查目录约定）。未配置代理时第三级会自动失败并跳过，不影响前两级和本地播放。

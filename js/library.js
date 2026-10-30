@@ -511,6 +511,13 @@
       });
     }
 
+    // 封面地址存在但加载失败（404 / 图床拒接）时标记一下，
+    // 交给 CSS 退回音符占位，不显示浏览器的破图图标
+    div.addEventListener('error', function (e) {
+      var img = e.target;
+      if (img && img.tagName === 'IMG' && img.hasAttribute('data-albumkey')) img.setAttribute('data-broken', '1');
+    }, true);
+
     div.addEventListener('click', function (e) {
       var nav = e.target.closest('[data-nav]');
       if (nav) {

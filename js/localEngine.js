@@ -473,8 +473,8 @@ function setupLazyTags(player) {
   function qqLyric(index, audio) {
     if (!audio) return;
     qqSearch(audio.name + ' ' + audio.artist).then(function (list) {
-      var it = qqPick(list, audio);
-      if (!it || !it.songmid) return null;
+      var it = qqPick(list, audio, 'songmid');
+      if (!it) return null;
       return qqGet('act=lyric&songmid=' + encodeURIComponent(it.songmid));
     }).then(function (j) {
       if (!j || !j.lyric) return;
@@ -561,9 +561,11 @@ function setupSeekFallback(player) {
  * 浏览器拿不到 CORS 授权且无法伪造 Referer，故统一走自建 EdgeOne 边缘函数代理，
  * 任何一步失败都静默降级为无封面/无歌词，不影响播放。
  * ============================================================ */
-// QQ 接口代理（EdgeOne 边缘函数）：服务端带 Referer/UA 请求 QQ 官方接口并加 CORS 头。
-// 自定义域名 qqyy.lololowe.com CNAME 到 EdgeOne 部署域名；默认/预览域名有 3 小时 token 保护，跨站 fetch 带不上 Cookie，不可用。
-var QQ_PROXY = 'https://qqyy.lololowe.com/qq';
+// QQ 接口代理：仓库根目录的 edge-functions/qq 边缘函数（与整站一起部署在同一个 EdgeOne 项目），
+// 服务端带 Referer/UA 请求 QQ 官方接口并加 CORS 头。自定义域名 music.lololowe.com 必须绑在该项目上：
+// EdgeOne 的默认/预览域名带 3 小时 token 保护，跨站 fetch 带不上 Cookie，不可用。
+// 如需改指自己的代理，在 config.js 里写 window.qq_proxy = 'https://你的域名/qq'（需在 edge-functions/qq 的 CORS 白名单里）。
+var QQ_PROXY = (typeof window.qq_proxy === 'string' && window.qq_proxy) ? window.qq_proxy : 'https://music.lololowe.com/qq';
 var QQ_COVER_TPL = 'https://y.gtimg.cn/music/photo_new/T002R800x800M000%s.jpg';
 
 function qqGet(query) {
@@ -586,14 +588,18 @@ function qqNormName(s) {
   return String(s || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').toLowerCase();
 }
 
-// 优先歌名+歌手双命中；歌名完全一致但歌手对不上时留作次选
-function qqPick(list, song) {
+// 优先歌名+歌手双命中；歌名完全一致但歌手对不上时留作次选。
+// need：本次用途必需的字段（找封面传 'albummid'、找歌词传 'songmid'）。
+// QQ 上大量 AI/翻唱条目只有 songmid 没有专辑，不跳过的话会顶在第一个人身上
+// 把后面真正带专辑封面的原版挡掉（表现为“歌词有、封面没”）。
+function qqPick(list, song, need) {
   var want = qqNormName(song.name);
   var artists = String(song.artist || '').split(/[、，,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
   var best = null;
   for (var i = 0; i < list.length; i++) {
     var it = list[i];
     if (!it || qqNormName(it.songname) !== want) continue;
+    if (need && !it[need]) continue;
     var singers = (it.singer || []).map(function (s) { return String(s.name || '').toLowerCase(); });
     if (artists.some(function (a) { return singers.indexOf(a) >= 0; })) return it;
     if (!best) best = it;
@@ -609,7 +615,7 @@ function b64Utf8(s) {
 
 function qqCoverUrl(name, artist) {
   return qqSearch(name + ' ' + artist).then(function (list) {
-    var it = qqPick(list, { name: name, artist: artist });
+    var it = qqPick(list, { name: name, artist: artist }, 'albummid');
     return it && it.albummid ? QQ_COVER_TPL.replace('%s', it.albummid) : '';
   });
 }

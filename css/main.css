@@ -8,6 +8,8 @@
   --heo-none: #00000000;
   --heo-gray: #999999;
   --heo-gray-op: #9999992b;
+  /* 无封面时的音符占位图（内联 SVG，供封面容器叠加使用） */
+  --salt-cover-ph-icon: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E");
   --heo-vip: #e5a80d;
   --heo-main: var(--heo-theme);
   --heo-main-op: var(--heo-theme-op);
@@ -956,10 +958,7 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
   margin: 0;
 }
 
-/* 无封面时的渐变占位 */
-#heoMusic-page.salt-no-cover .aplayer-pic {
-  background-image: linear-gradient(150deg, rgb(var(--salt-accent-light)), rgb(var(--salt-accent-dark))) !important;
-}
+/* 无封面时的渐变占位见文末「无封面占位符」一节（与音乐库、底栏共用一套图形） */
 
 /* 歌词区 */
 #heoMusic-page .aplayer-body {
@@ -2272,4 +2271,46 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 #heoMusic-page.salt-lyrics-clear .aplayer-info .aplayer-lrc p.aplayer-lrc-current {
   opacity: 1;
   color: rgba(255, 255, 255, 0.84);
+}
+
+/* ==================== 无封面占位符 ==================== */
+/* 三级兜底链全部落空时，封面位置不再是“一片黑”。图形用内联 SVG（零请求、不受 CSP 影响），
+   底色沿用各容器原有的渐变；图片一旦到位，<img> 与内联 background-image 会自然盖在上层，
+   所以不需要 JS 参与“占位/取消占位”的切换。 */
+.salt-lib-cover,
+.salt-lib-thumb,
+.salt-lib-avatar,
+.salt-lib-dcover {
+  background-image: var(--salt-cover-ph-icon), linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05));
+  background-repeat: no-repeat;
+  background-position: center, center;
+  background-size: 34%, cover;
+}
+
+/* 底栏：有封面时 JS 会写内联 background-image 并加 .has，无封面时才落到占位样式 */
+.salt-dock-cover:not(.has) {
+  background-image: var(--salt-cover-ph-icon), linear-gradient(150deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05));
+  background-repeat: no-repeat;
+  background-position: center, center;
+  background-size: 36%, cover;
+}
+
+/* 播放页大图：!important 压过 APlayer 创建时写入的内联 background-image */
+#heoMusic-page.salt-no-cover .aplayer-pic {
+  background-image: var(--salt-cover-ph-icon), linear-gradient(150deg, rgb(var(--salt-accent-light)), rgb(var(--salt-accent-dark))) !important;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 26%, cover;
+}
+
+/* 封面加载失败（地址存在但 404 / 被墙）时退到同一套占位，避免破图图标 */
+.salt-lib-cover img:not([src]),
+.salt-lib-thumb img:not([src]),
+.salt-lib-avatar img:not([src]),
+.salt-lib-dcover img:not([src]),
+.salt-lib-cover img[data-broken],
+.salt-lib-thumb img[data-broken],
+.salt-lib-avatar img[data-broken],
+.salt-lib-dcover img[data-broken] {
+  display: none;
 }

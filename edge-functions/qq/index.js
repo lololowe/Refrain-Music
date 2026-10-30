@@ -1,11 +1,12 @@
-// EdgeOne 边缘函数：QQ 音乐官方接口代理（路由 /qq）
+// EdgeOne 边缘函数：QQ 音乐官方接口代理（仓库根目录的 edge-functions/qq，与整站同项目部署，路由 /qq）
 // 浏览器拿不到 c.y.qq.com 的 CORS 授权、也无法伪造 Referer；老的 client_search_cp
 // 接口已退役（服务端直连也 500）。这里在服务端复刻 MusicPlayer2 原生客户端的请求头，
 // 改走现役 u.y.qq.com/cgi-bin/musics.fcg + sign 签名，再把结果带 CORS 头返回。
 // 运行时为 V8（非 Node）：不用 Node 内置、不用 btoa/escape，base64 与 UTF-8 自行实现。
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const REFERER = 'https://y.qq.com/';
-const TRUSTED = /^https?:\/\/host\.lololowe\.com(:\d+)?$/;
+// music.lololowe.com 是同域（本来不需要 CORS），host.lololowe.com 是本地开发的跨域来源
+const TRUSTED = /^https?:\/\/(?:host|music)\.lololowe\.com(:\d+)?$/;
 
 /* ---------- UTF-8 字节与 base64（V8 安全实现） ---------- */
 function utf8Bytes(s) { return new TextEncoder().encode(String(s)); }
