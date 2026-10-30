@@ -1,0 +1,20 @@
+// 播放列表 ID：从音乐平台歌单分享链接中获取，例如 https://y.qq.com/n/ryqq/playlist/8668419170 中的 8668419170
+var userId = "652135520";
+var userServer = "netease";
+var userType = "playlist";
+// var localMusic = [{
+//     name: '重生之我在异乡为异客',
+//     artist: '王睿卓',
+//     url: '/music/重生之我在异乡为异客.mp3',
+//     cover: '/music/重生之我在异乡为异客.png',
+//     lrc: '/music/重生之我在异乡为异客.lrc'
+// },
+// {
+//     name: '落',
+//     artist: '唐伯虎',
+//     url: '/music/落.mp3',
+//     cover: '/music/落.png',
+//     lrc: '/music/落.lrc'
+// }
+// ];
+// var remoteMusic = "./music-list.json"
