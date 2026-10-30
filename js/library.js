@@ -54,6 +54,17 @@
   function albumYear(name) { var m = /^(\d{4})[-_ ]/.exec(name || ''); return m ? m[1] : ''; }
   function albumDisplay(name) { return (name || '').replace(/^\d{4}[-_ ]/, ''); }
 
+  // 专辑排序：年份降序（新专辑在前），无年份的排最后，同年/同年缺省时按专辑名升序
+  function cmpAlbumKey(k1, k2) {
+    var y1 = albumYear(k1), y2 = albumYear(k2);
+    if (y1 !== y2) {
+      if (!y1) return 1;
+      if (!y2) return -1;
+      return y2.localeCompare(y1);
+    }
+    return albumDisplay(k1).localeCompare(albumDisplay(k2), 'zh-Hans-CN');
+  }
+
   function buildAlbums() {
     var map = {}, order = [];
     songs().forEach(function (sg, i) {
@@ -61,7 +72,7 @@
       if (!map[k]) { map[k] = { key: k, name: albumDisplay(k) || k, year: albumYear(k), songs: [] }; order.push(k); }
       map[k].songs.push(i);
     });
-    return order.map(function (k) {
+    return order.slice().sort(cmpAlbumKey).map(function (k) {
       var a = map[k];
       var meta = (S.meta.albums || {})[k] || {};
       a.pic = meta.pic || S.covers[k] || '';
@@ -82,10 +93,10 @@
     });
     return order.map(function (name) {
       var a = map[name];
-      var firstAlbum = Object.keys(a.albums)[0];
+      a.albumKeys = Object.keys(a.albums).sort(cmpAlbumKey);
       var meta = (S.meta.artists || {})[name] || {};
-      a.pic = meta.pic || S.covers[firstAlbum] || '';
-      a.albumKeys = Object.keys(a.albums);
+      // 头像兜底取最新一张专辑的封面（albumKeys 已按年份降序）
+      a.pic = meta.pic || S.covers[a.albumKeys[0]] || '';
       a.count = a.songIdx.length;
       return a;
     });
@@ -94,7 +105,6 @@
   /* ---------------- 封面按需提取（每专辑只取第一首） ---------------- */
   function startCoverExtract() {
     if (S.coversStarted) return;
-    S.coversStarted = true;
 
     var albums = buildAlbums();
     // 优先使用用户在 music-list.json 里填写的 cover URL（无需 CORS，同步可用）
@@ -103,19 +113,30 @@
       if (first && first.cover && !S.covers[a.key]) S.covers[a.key] = first.cover;
     });
 
-    // 无内嵌提取能力时，仅依赖已填充的 cover URL（render 已在 show() 中调用）
-    if (!(window.HeoTags && window.HeoTags.extractCover)) return;
+    // localEngine 异步加载，HeoTags 可能尚未就绪：短暂重试，别一次性放弃内嵌提取
+    if (!(window.HeoTags && window.HeoTags.extractCover)) {
+      S.coverTries = (S.coverTries || 0) + 1;
+      if (S.coverTries <= 100) setTimeout(startCoverExtract, 300);
+      return;
+    }
+    S.coversStarted = true;
 
     // 只有没有 cover 的专辑才走 FLAC 内嵌提取兜底（依赖 CORS，尽力而为）
     var queue = albums.filter(function (a) { return !S.covers[a.key]; })
-      .map(function (a) { return { key: a.key, url: songs()[a.songs[0]].url }; });
+      .map(function (a) { return { key: a.key, songIdx: a.songs[0], url: songs()[a.songs[0]].url }; });
     var CONC = 3;
     function next() {
       if (!queue.length) { renderContent(); return; }
       var job = queue.shift();
       window.HeoTags.extractCover(job.url).then(function (blob) {
-        if (blob) { S.covers[job.key] = blob; patchCovers(job.key); }
-        next();
+        if (blob) { S.covers[job.key] = blob; patchCovers(job.key); next(); return; }
+        // 内嵌提取无结果：退到 QQ 音乐接口识别专辑封面
+        var sg = songs()[job.songIdx];
+        var qq = (sg && window.HeoTags.qqCoverUrl) ? window.HeoTags.qqCoverUrl(sg.name, sg.artist) : Promise.resolve('');
+        qq.then(function (u) {
+          if (u) { S.covers[job.key] = u; patchCovers(job.key); }
+          next();
+        }).catch(function () { next(); });
       }).catch(function () { next(); });
     }
     for (var i = 0; i < CONC; i++) next();
@@ -272,7 +293,7 @@
       ar.albumKeys.forEach(function (k) {
         rh += '<div class="salt-lib-card" data-album="' + esc(k) + '">' +
           '<div class="salt-lib-cover">' + coverImg(k) + '</div>' +
-          '<b>' + esc(albumDisplay(k) || k) + '</b><span><i>' + ar.albums[k].length + ' 首歌曲</i></span></div>';
+          '<b>' + esc(albumDisplay(k) || k) + '</b><span><i>' + ar.albums[k].length + ' 首歌曲' + (albumYear(k) ? ' ' + albumYear(k) : '') + '</i></span></div>';
       });
       return { title: ar.name, count: ar.count, search: false, html: rh + '</div>' };
     }
@@ -415,8 +436,11 @@
       fmtTime(ap.audio && ap.audio.duration ? ap.audio.duration : 0);
     var cov = document.getElementById('salt-dock-cover');
     if (cov) {
-      var ck = a ? albumKeyOf({ album: a.album, url: a.url }) : '';
-      var p = S.covers[ck] || (S.meta.albums && S.meta.albums[ck] && S.meta.albums[ck].pic) || '';
+      // audio 对象没有 album 字段：用 srcIndex 回到全量曲库取原始歌曲，
+      // 否则 albumKeyOf 会退化成 url 父文件夹推导（带年份前缀），与 S.covers 的 key 对不上
+      var src = (a && typeof a.srcIndex === 'number' && songs()) ? songs()[a.srcIndex] : a;
+      var ck = src ? albumKeyOf(src) : '';
+      var p = (a && a.cover) || S.covers[ck] || (S.meta.albums && S.meta.albums[ck] && S.meta.albums[ck].pic) || '';
       if (p) { cov.style.backgroundImage = window.saltCssUrl ? window.saltCssUrl(p) : 'url("' + p + '")'; cov.classList.add('has'); }
       else { cov.style.backgroundImage = ''; cov.classList.remove('has'); }
     }
@@ -450,8 +474,13 @@
       if (bar && ap.audio && ap.audio.duration) {
         bar.style.width = (ap.audio.currentTime / ap.audio.duration * 100).toFixed(2) + '%';
       }
-      var t = document.getElementById('salt-dock-time');
-      if (t) t.textContent = fmtTime(ap.audio.currentTime) + ' / ' + fmtTime(ap.audio.duration);
+      // 底栏可见时间写在 salt-dock-sub（歌手 · 时间）里，必须随 timeupdate 一起刷新
+      var sub = document.getElementById('salt-dock-sub');
+      if (sub && ap.list && ap.list.audios) {
+        var ca = ap.list.audios[ap.list.index];
+        sub.textContent = (ca ? (ca.artist || '') : '') + ' · ' +
+          fmtTime(ap.audio.currentTime) + ' / ' + fmtTime(ap.audio.duration);
+      }
     });
   }
 
@@ -640,8 +669,18 @@
     })
     .catch(function () {});
 
+  // 播放页从音频内嵌标签提取到封面时回填音乐库（音乐库自己的兜底未跑或失败时）
+  function noteCover(idx, pic) {
+    if (typeof idx !== 'number' || !pic) return;
+    var sg = songs() && songs()[idx];
+    if (!sg) return;
+    var k = albumKeyOf(sg);
+    if (k && !S.covers[k]) { S.covers[k] = pic; patchCovers(k); }
+  }
+
   window.SaltLibrary = {
     open: open, close: close, toggle: toggle,
-    available: available, refresh: render, updateDock: updateDock
+    available: available, refresh: render, updateDock: updateDock,
+    noteCover: noteCover
   };
 })();

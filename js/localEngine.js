@@ -422,8 +422,11 @@ function setupLazyTags(player) {
     if (!audio) return;
     function embedded() {
       extractEmbeddedTags({ url: audio.url, userCover: true, userLrc: false })
-        .then(function (tags) { if (tags && tags.lrc) applyLrc(index, tags.lrc); })
-        .catch(function () {});
+        .then(function (tags) {
+          if (tags && tags.lrc) { applyLrc(index, tags.lrc); return; }
+          qqLyric(index, audio);
+        })
+        .catch(function () { qqLyric(index, audio); });
     }
     if (audio.lrcUrl) {
       var p = lrcCache[audio.lrcUrl]
@@ -440,15 +443,44 @@ function setupLazyTags(player) {
     }
   }
 
-  // 封面：用户未填 cover 时从音频内嵌 APIC/PICTURE 补全
+  // 封面：用户未填 cover 时从音频内嵌 APIC/PICTURE 补全，再退到 QQ 音乐接口识别
   function loadCover(index) {
     var audio = player.list.audios[index];
     if (!audio || audio.cover) return;
     extractEmbeddedTags({ url: audio.url, userCover: false, userLrc: true })
       .then(function (tags) {
-        if (tags && tags.cover && !audio.cover) { audio.cover = tags.cover; applyCover(index); }
+        if (tags && tags.cover && !audio.cover) {
+          audio.cover = tags.cover; applyCover(index);
+          if (window.SaltLibrary && window.SaltLibrary.noteCover) window.SaltLibrary.noteCover(audio.srcIndex, tags.cover);
+          return;
+        }
+        qqCover(index, audio);
       })
-      .catch(function () {});
+      .catch(function () { qqCover(index, audio); });
+  }
+
+  // QQ 兜底：按 歌名+歌手 搜索识别，取专辑封面（json 未填 + 无内嵌时才走到这里）
+  function qqCover(index, audio) {
+    if (!audio || audio.cover) return;
+    qqCoverUrl(audio.name, audio.artist).then(function (url) {
+      if (!url || audio.cover) return;
+      audio.cover = url; applyCover(index);
+      if (window.SaltLibrary && window.SaltLibrary.noteCover) window.SaltLibrary.noteCover(audio.srcIndex, url);
+    }).catch(function () {});
+  }
+
+  // QQ 兜底：识别后取歌词（base64 解码），仅接受带时间轴的 LRC
+  function qqLyric(index, audio) {
+    if (!audio) return;
+    qqSearch(audio.name + ' ' + audio.artist).then(function (list) {
+      var it = qqPick(list, audio);
+      if (!it || !it.songmid) return null;
+      return qqGet('act=lyric&songmid=' + encodeURIComponent(it.songmid));
+    }).then(function (j) {
+      if (!j || !j.lyric) return;
+      var text = b64Utf8(j.lyric);
+      if (text && isLrc(text)) applyLrc(index, text);
+    }).catch(function () {});
   }
 
   function ensure(index) {
@@ -522,6 +554,66 @@ function setupSeekFallback(player) {
   });
 }
 
+/* ============================================================
+ * QQ 音乐官方接口兜底（参考 MusicPlayer2 的 CQQMusicLyricDownload）：
+ * json 未填链接 + 音频无内嵌标签时，按 歌名+歌手 搜索识别 songmid/albummid，
+ * 封面拼 gtimg 图床、歌词走 fcg_query_lyric_new。
+ * 浏览器拿不到 CORS 授权且无法伪造 Referer，故统一走自建 EdgeOne 边缘函数代理，
+ * 任何一步失败都静默降级为无封面/无歌词，不影响播放。
+ * ============================================================ */
+// QQ 接口代理（EdgeOne 边缘函数）：服务端带 Referer/UA 请求 QQ 官方接口并加 CORS 头。
+// 自定义域名 qqyy.lololowe.com CNAME 到 EdgeOne 部署域名；默认/预览域名有 3 小时 token 保护，跨站 fetch 带不上 Cookie，不可用。
+var QQ_PROXY = 'https://qqyy.lololowe.com/qq';
+var QQ_COVER_TPL = 'https://y.gtimg.cn/music/photo_new/T002R800x800M000%s.jpg';
+
+function qqGet(query) {
+  return fetch(QQ_PROXY + '?' + query).then(function (res) {
+    if (!res.ok) throw new Error('qq proxy ' + res.status);
+    return res.json();
+  });
+}
+
+function qqSearch(keywords) {
+  return qqGet('act=search&w=' + encodeURIComponent(keywords))
+    .then(function (j) {
+      var list = j && j.list;
+      return Array.isArray(list) ? list : [];
+    });
+}
+
+// 归一化歌名：去括号后缀、去空白、小写，便于与接口结果对齐
+function qqNormName(s) {
+  return String(s || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').toLowerCase();
+}
+
+// 优先歌名+歌手双命中；歌名完全一致但歌手对不上时留作次选
+function qqPick(list, song) {
+  var want = qqNormName(song.name);
+  var artists = String(song.artist || '').split(/[、，,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+  var best = null;
+  for (var i = 0; i < list.length; i++) {
+    var it = list[i];
+    if (!it || qqNormName(it.songname) !== want) continue;
+    var singers = (it.singer || []).map(function (s) { return String(s.name || '').toLowerCase(); });
+    if (artists.some(function (a) { return singers.indexOf(a) >= 0; })) return it;
+    if (!best) best = it;
+  }
+  return best;
+}
+
+function b64Utf8(s) {
+  if (!s) return '';
+  try { return decodeURIComponent(escape(atob(s))); }
+  catch (e) { try { return atob(s); } catch (e2) { return ''; } }
+}
+
+function qqCoverUrl(name, artist) {
+  return qqSearch(name + ' ' + artist).then(function (list) {
+    var it = qqPick(list, { name: name, artist: artist });
+    return it && it.albummid ? QQ_COVER_TPL.replace('%s', it.albummid) : '';
+  });
+}
+
 window.initLocalPlayer = initLocalPlayer;
 
 // 供音乐库按需提取内嵌封面（每专辑只取第一首，避免全量请求）
@@ -530,7 +622,9 @@ window.HeoTags = {
     return extractEmbeddedTags({ url: url, userCover: false, userLrc: true }).then(function (tags) {
       return tags ? tags.cover : null;
     });
-  }
+  },
+  // 音乐库专辑封面兜底：内嵌提取无结果时走 QQ 识别
+  qqCoverUrl: qqCoverUrl
 };
 
 // 页面加载本文件后直接初始化单歌单播放器

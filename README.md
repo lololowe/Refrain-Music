@@ -151,3 +151,23 @@ musicjson内容例如：
 - `albums` 的 key 必须与 `music-list.json` 里的 `album` 字段（或缺省推导出的父文件夹名）**完全一致**
 - 专辑封面回退链：`music-meta.json` 的 `pic` → 自动取该专辑第一首歌的 `cover` → 留空
 - 艺术家头像回退链：`music-meta.json` 的 `pic` → 其第一张专辑的封面 → 留空
+
+## 封面 / 歌词自动补全（三级兜底）
+
+每首歌的封面与歌词按下面的顺序取值，前一级拿不到才走下一级（实现在 [js/localEngine.js](js/localEngine.js)，音乐库侧的同步逻辑在 [js/library.js](js/library.js)）：
+
+1. **数据文件里的外链** —— `music-list.json` 的 `cover` / `lrc` 字段，或 `music-meta.json` 的专辑 `pic`
+2. **音频内嵌标签** —— 用 `Range` 请求只读文件头尾，解析 FLAC 的 `VORBIS PICTURE` / `METADATA_BLOCK` 与 MP3 的 ID3v2 `APIC` / `USLT`；封面提取成功后会回写音乐库，专辑页、歌曲行、卡片和底栏一并刷新
+3. **QQ 音乐接口识别** —— 按「歌名 + 歌手」搜索匹配，用命中的 `albummid` 拼封面图地址、用 `songmid` 取歌词（base64 解码后校验是否为合法 LRC）
+
+### 第三级依赖的接口代理
+
+浏览器直连 `c.y.qq.com` 会被 CORS 拦住，且无法携带必需的 `Referer`，因此第三级通过一个腾讯云 EdgeOne 边缘函数代理转发，函数源码在 [edge/qq-proxy/edge-functions/qq/index.js](edge/qq-proxy/edge-functions/qq/index.js)。
+
+- **路由**：`/qq`，参数 `act=search&w=关键词`、`act=lyric&songmid=xxx`、`act=probe`（自诊断，返回两种签名前缀的上游响应）
+- **改歌名歌手不匹配时**：匹配策略（歌名归一化 + 歌手交集）在 `localEngine.js` 的 `qqPick` 里
+- **部署**：装好 EdgeOne CLI 后，在 `edge/qq-proxy` 目录执行 `edgeone makers deploy . -n <项目名> --json`；函数必须放在 `edge-functions/<名>/index.js` 并导出 `onRequest`，运行时是 V8（无 Node 内置模块、无 `btoa`/`escape`，`Response.json()` 也不可用）
+- **必须绑定自定义域名**：EdgeOne 的默认域名带 3 小时 token 预览保护，播放器发出的跨站 `fetch` 携带不上校验 Cookie，会稳定返回 401；把自己的域名 CNAME 到部署域名后才是可用的程序接口
+- **前端地址**：改成你自己的代理域名，[js/localEngine.js](js/localEngine.js) 顶部的 `QQ_PROXY`（形如 `https://你的域名/qq`）；函数里的 CORS 白名单正则 `TRUSTED` 也需要同步改成你的站点来源
+
+未配置代理时第三级会自动失败并跳过，不影响前两级和本地播放。
