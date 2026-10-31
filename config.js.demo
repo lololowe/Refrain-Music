@@ -2,19 +2,7 @@
 var userId = "652135520";
 var userServer = "netease";
 var userType = "playlist";
-// var localMusic = [{
-//     name: '重生之我在异乡为异客',
-//     artist: '王睿卓',
-//     url: '/music/重生之我在异乡为异客.mp3',
-//     cover: '/music/重生之我在异乡为异客.png',
-//     lrc: '/music/重生之我在异乡为异客.lrc'
-// },
-// {
-//     name: '落',
-//     artist: '唐伯虎',
-//     url: '/music/落.mp3',
-//     cover: '/music/落.png',
-//     lrc: '/music/落.lrc'
-// }
-// ];
+
+// 本地音乐模式：指向曲库 JSON（相对路径或外链均可），数组内容为歌曲对象，格式见 README「本地音乐库数据文件」。
+// 增删歌曲直接改这个 JSON 文件；留空 / 注释掉则走在线模式。
 // var remoteMusic = "./music-list.json"
