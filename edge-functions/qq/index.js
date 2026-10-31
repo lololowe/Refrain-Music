@@ -182,7 +182,10 @@ export async function onRequest(context) {
       // 页面才能拿到 blob 存成文件。mid 只允许字母数字并限长，避免被打成任意图床代理。
       const mid = u.searchParams.get('mid') || '';
       if (!/^[A-Za-z0-9]{1,64}$/.test(mid)) return json({ error: 'bad mid' }, 400);
-      const res = await fetch('https://y.gtimg.cn/music/photo_new/T002R800x800M000' + mid + '.jpg',
+      // CDN 实测只认这 6 个正方形尺寸（其余 404）；用白名单拼接，顺带堵死路径注入
+      const sz = u.searchParams.get('size') || '800';
+      if (['150', '300', '500', '800', '1200', '1500'].indexOf(sz) < 0) return json({ error: 'bad size' }, 400);
+      const res = await fetch('https://y.gtimg.cn/music/photo_new/T002R' + sz + 'x' + sz + 'M000' + mid + '.jpg',
         { headers: { Referer: REFERER, 'User-Agent': UA } });
       if (!res.ok || !res.body) throw new Error('cover upstream ' + res.status);
       const ch = Object.assign({}, h);

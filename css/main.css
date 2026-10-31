@@ -2229,6 +2229,11 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 #heoMusic-page.salt-idle .aplayer-info .aplayer-controller .aplayer-time,
 #heoMusic-page.salt-idle .aplayer-info .aplayer-controller .salt-bar-right { opacity: 0; pointer-events: none; }
 #heoMusic-page.salt-idle .salt-capsule-meta .aplayer-music .aplayer-author { opacity: 0; }
+/* 鼠标静止时一并隐藏指针：和底栏收起同一个 salt-idle 类（一动就恢复）；
+   音乐库是盖在上面的独立元素，指针落在库上时不受此规则影响 */
+@media (pointer: fine) {
+  #heoMusic-page.salt-idle { cursor: none; }
+}
 
 /* 音乐库：定位当前播放按钮 + 正在播放行高亮 */
 .salt-lib-locate {

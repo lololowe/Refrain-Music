@@ -198,6 +198,12 @@ tbody tr[aria-selected="true"]:hover td { background: var(--active); }
 /* 窄栏里动作占满整行（两列等宽），不挤封面与标题：三项复制 + 下载封面 */
 .obj-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
 .obj-acts .btn { padding-inline: 8px; }
+/* 封面尺寸 chips：即时切换预览/下载/复制/JSON 的档位；选中靠反白，不占用只给数据的品牌色 */
+.size-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; }
+.size-label { font-size: var(--fs-small); color: var(--faint); margin-right: 2px; }
+.size-chip { height: 26px; padding: 0 9px; font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+.size-chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); border-color: transparent; }
+.viewer .size-row { justify-content: center; width: auto; }
 
 .panel { background: var(--surface); border-radius: var(--radius-card); padding: var(--card-pad); min-width: 0; }
 .panel > header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
@@ -374,7 +380,10 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
   'use strict';
 
   var API = new URLSearchParams(location.search).get('api') || 'https://music.lololowe.com/qq';
-  var COVER = 'https://y.gtimg.cn/music/photo_new/T002R800x800M000%s.jpg';
+  // QQ 封面 CDN 实测有效的正方形尺寸只有这 6 档（其余数字 404）；800 是播放器自动识别用的档位
+  var SIZES = [150, 300, 500, 800, 1200, 1500];
+  var COVER_TPL = 'https://y.gtimg.cn/music/photo_new/T002R{s}x{s}M000%s.jpg';
+  var THUMB = 150;   // 表内与详情缩略图固定小图：显示只有 48/62px，不跟着所选档位白拉大图
   var LIMIT = 5;
   // 缺失值的灰破折号（不是零，是「没有这项」）：全页只在这一处写字面量
   var DASH = '—';
@@ -390,7 +399,12 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
   var noteEl = document.getElementById('list-note');
   var detailEl = document.getElementById('detail');
 
-  var state = { all: [], shown: [], pickedAlbum: -1, pickedLyric: -1, sel: -1, lyric: {}, query: '' };
+  var state = { all: [], shown: [], pickedAlbum: -1, pickedLyric: -1, sel: -1, lyric: {}, query: '', size: 800 };
+  // 记住上次选的封面尺寸（file:// 下 localStorage 可能禁用，失败就静默用默认 800）
+  try {
+    var savedSize = +localStorage.getItem('refrain.coverSize');
+    if (SIZES.indexOf(savedSize) >= 0) state.size = savedSize;
+  } catch (e) {}
 
   /* ---------- 工具 ---------- */
   function esc(s) {
@@ -412,7 +426,9 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
   function singers(it) {
     return (it.singer || []).map(function (s) { return s && s.name; }).filter(Boolean).join(' / ');
   }
-  function coverURL(it) { return it && it.albummid ? COVER.replace('%s', it.albummid) : ''; }
+  function coverAt(it, s) { return it && it.albummid ? COVER_TPL.replace(/\{s\}/g, s).replace('%s', it.albummid) : ''; }
+  function coverURL(it) { return coverAt(it, THUMB); }      // 页内缩略图
+  function coverBig(it) { return coverAt(it, state.size); }  // 当前所选尺寸：预览 / 下载 / 复制 / JSON 片段都读它
   function b64Utf8(s) {
     if (!s) return '';
     try { return new TextDecoder('utf-8').decode(Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); })); }
@@ -538,12 +554,21 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
   }
 
   /* ---------- 渲染：详情 ---------- */
+  // 封面尺寸 chips：即时切换，预览 / 下载 / 复制 / JSON 片段一起改读所选档位；选中靠反白（与主控件同一语言）
+  function sizeChipsHTML() {
+    return '<div class="size-row" role="group" aria-label="封面尺寸">' +
+      '<span class="size-label">封面尺寸</span>' +
+      SIZES.map(function (s) {
+        return '<button class="btn sm size-chip" type="button" data-size="' + s + '" aria-pressed="' + (s === state.size) + '">' + s + '</button>';
+      }).join('') + '</div>';
+  }
+
   function jsonSnippet(it) {
     var o = {
       name: it.songname || '',
       artist: (it.singer || []).map(function (s) { return s && s.name; }).filter(Boolean).join('、'),
       url: '',
-      cover: coverURL(it)
+      cover: coverBig(it)
     };
     var k = albumKey(it);
     if (k) o.album = k;
@@ -595,6 +620,7 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
           '<button class="btn sm" type="button" data-dl="cover" data-i="' + i + '"' + (it.albummid ? '' : ' disabled') + '>下载封面</button>' +
           '<button class="btn sm" type="button" data-copy="json" data-i="' + i + '">复制 JSON</button>' +
         '</div>' +
+        sizeChipsHTML() +
       '</div>' +
       '<div class="panel">' +
         '<header><h3>播放器判定</h3></header>' +
@@ -604,7 +630,7 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
         '<header><h3>music-list.json 片段</h3>' +
         '<div class="hacts"><button class="btn sm" type="button" data-copy="json" data-i="' + i + '">复制</button></div></header>' +
         '<div class="well code"><pre><code>' + esc(jsonSnippet(it)) + '</code></pre></div>' +
-        '<p class="why-line">url 自己补；lrc 不需要填，播放器会按 songmid 自己取。</p>' +
+        '<p class="why-line">url 自己补；lrc 不需要填，播放器会按 songmid 自己取；封面地址用当前选中的尺寸。</p>' +
       '</div>' +
       '<div class="panel">' +
         '<header><h3>字段</h3></header>' +
@@ -777,9 +803,21 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
     if (!it) return;
     var what = b.getAttribute('data-copy');
     if (what === 'key') copyText(albumKey(it), b);
-    else if (what === 'cover') copyText(COVER.replace('%s', it.albummid), b);
+    else if (what === 'cover') copyText(coverBig(it), b);
     else if (what === 'json') copyText(jsonSnippet(it), b);
     else if (what === 'lrc') copyText((state.lyric[state.sel] || {}).text || '', b);
+  });
+
+  /* ---------- 尺寸切换：详情卡与大图预览里的 chips 共用一个状态 ---------- */
+  document.addEventListener('click', function (e) {
+    var c = e.target.closest('button[data-size]');
+    if (!c) return;
+    var s = +c.getAttribute('data-size');
+    if (s === state.size) return;
+    state.size = s;
+    try { localStorage.setItem('refrain.coverSize', String(s)); } catch (err) {}
+    if (state.sel >= 0) renderDetail();          // 刷新下载/复制按钮与 JSON 片段里的尺寸
+    if (viewer) openViewer(viewerI, viewerBack); // 重建大图：换地址、换说明、换选中态
   });
 
   /* ---------- 下载 ----------
@@ -807,9 +845,10 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
     });
   }
   function downloadURL(url, mid, filename, btn) {
-    // 候选源按优先级排队：代理 → 直连 CDN，一个拿到字节就收工（不并发，免得白拉两趟）
+    // 候选源按优先级排队：代理 → 直连 CDN，一个拿到字节就收工（不并发，免得白拉两趟）；
+    // 代理把尺寸透传给上游（旧版代理忽略 size 会回 800，重新部署即好）
     var sources = [];
-    if (mid && /^https?:\/\//i.test(API)) sources.push(API + '?act=cover&mid=' + encodeURIComponent(mid));
+    if (mid && /^https?:\/\//i.test(API)) sources.push(API + '?act=cover&mid=' + encodeURIComponent(mid) + '&size=' + state.size);
     sources.push(url);
     (function next(k) {
       if (k >= sources.length) { window.open(url, '_blank', 'noopener'); flash(btn, '已在新窗口打开'); return; }
@@ -822,7 +861,7 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
     if (!it || btn.disabled) return;
     if (btn.getAttribute('data-dl') === 'cover') {
       if (!it.albummid) return;
-      downloadURL(coverURL(it), it.albummid, fileBase(it) + '.jpg', btn);
+      downloadURL(coverBig(it), it.albummid, fileBase(it) + '_' + state.size + '.jpg', btn);
       return;
     }
     var l = state.lyric[+btn.getAttribute('data-i')];
@@ -833,20 +872,21 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
   }
 
   /* ---------- 封面大图预览 ---------- */
-  var viewer = null, viewerBack = null;
+  var viewer = null, viewerBack = null, viewerI = -1;
   function closeViewer() {
     if (!viewer) return;
     var v = viewer, back = viewerBack;
-    viewer = null; viewerBack = null;
+    viewer = null; viewerBack = null; viewerI = -1;
     document.body.classList.remove('viewer-open');
     v.remove();
     if (back && back.focus) back.focus();
   }
   function openViewer(i, trigger) {
     var it = state.shown[i];
-    var url = coverURL(it);
+    var url = coverBig(it);
     if (!it || !url) return;
     closeViewer();
+    viewerI = i;
     viewerBack = trigger || null;
     viewer = document.createElement('div');
     viewer.className = 'viewer';
@@ -857,7 +897,8 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
       '<div class="viewer-in">' +
         '<img src="' + esc(url) + '" alt="' + esc('封面大图：' + (it.songname || '')) + '">' +
         '<p class="viewer-cap">' + esc(singers(it) || DASH) + ' · ' + esc(it.albumname || DASH) +
-          (it.time_public ? ' · ' + esc(it.time_public) : '') + '</p>' +
+          (it.time_public ? ' · ' + esc(it.time_public) : '') + ' · ' + state.size + '×' + state.size + '</p>' +
+        sizeChipsHTML() +
         '<div class="viewer-acts">' +
           '<button class="btn primary sm" type="button" data-vdl="1">下载图片</button>' +
           '<button class="btn sm" type="button" data-vopen="1">在新窗口打开</button>' +
@@ -866,10 +907,10 @@ footer code { font: var(--fs-small)/20px var(--font); color: var(--muted); }
       '</div>';
     viewer.addEventListener('click', function (e) {
       if (e.target === viewer || e.target.closest('button[data-vclose]')) { closeViewer(); return; }
-      if (e.target.closest('button[data-vdl]')) { downloadURL(url, it.albummid, fileBase(it) + '.jpg', e.target.closest('button')); return; }
+      if (e.target.closest('button[data-vdl]')) { downloadURL(url, it.albummid, fileBase(it) + '_' + state.size + '.jpg', e.target.closest('button')); return; }
       if (e.target.closest('button[data-vopen]')) window.open(url, '_blank', 'noopener');
     });
-    // Tab 在三个按钮里循环，不会跑到背后的页面去
+    // Tab 在尺寸 chips 与三个操作按钮里循环，不会跑到背后的页面去
     viewer.addEventListener('keydown', function (e) {
       if (e.key !== 'Tab') return;
       var f = viewer.querySelectorAll('button');
