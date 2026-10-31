@@ -2,11 +2,13 @@
 
 ![Refrain 播放界面](/img/screenshot.png)
 
+预览地址：https://music.lololowe.com
+
 一个基于 [APlayer](https://github.com/DIYgod/APlayer) 、 [MetingJS](https://github.com/metowolf/MetingJS)和 [zhheo/HeoMusic](https://github.com/zhheo/HeoMusic) 的静态音乐播放器，重新设计了播放界面与本地音乐库。
 
 - **纯静态部署**：无需数据库与服务端，丢到 Nginx / GitHub Pages / EdgeOne 就能跑；在线解析走公共 Meting 接口，本地曲库只是一个 JSON 文件。
 - **自动识别**：本地歌曲最少只需填 `url` / `artist` / `name`，封面、歌词、专辑与发行年份会自动补全（优先提取音频内嵌标签，缺失时经 QQ 音乐接口识别）。
-- **更美观的播放器**：重写 UI，胶囊轮廓进度条，以及带歌曲 / 专辑 / 艺术家三个视图的音乐库，配套键盘快捷键。
+- **更美观的播放器**：封面跟随鼠标 3D 倾斜、封面下方倒影、高斯模糊的歌词遮罩（悬停时变清晰）、以当前封面模糊取色作环境光背景、胶囊轮廓进度条与玻璃拟态面板；另有带歌曲 / 专辑 / 艺术家三个视图的音乐库，配套键盘快捷键。
 - **两种模式**：在线歌单（URL 参数或 `config.js`）与本地音乐库（`music-list.json`），互不干扰。
 
 ## 基本操作

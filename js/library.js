@@ -454,6 +454,7 @@
       var el = document.getElementById('salt-lib-search');
       if (el) el.value = '';
       renderContent();
+      scrollContentTop();
     });
     // 仅更新标题里的数量，不重建搜索框
     var sp = lib.querySelector('.salt-lib-head h1 span');
@@ -479,11 +480,13 @@
       composing = false;
       S.query = el.value;
       renderContent();
+      scrollContentTop();
     });
     el.addEventListener('input', function () {
       if (composing) return;   // 输入法组词过程中不重渲染
       S.query = el.value;
       renderContent();
+      scrollContentTop();
     });
   }
 
@@ -686,7 +689,7 @@
       }
       // 艺术家页分区切换：专辑 / 歌曲
       var atab = e.target.closest('[data-artisttab]');
-      if (atab) { S.artistTab = atab.getAttribute('data-artisttab'); renderContent(); return; }
+      if (atab) { S.artistTab = atab.getAttribute('data-artisttab'); renderContent(); scrollContentTop(); return; }
       if (e.target.closest('#salt-lib-locate')) { locatePlaying(); return; }
       var act = e.target.closest('[data-act]');
       if (act) {
@@ -730,6 +733,16 @@
     show();
   }
 
+  // 切换页面时把内容区滚回顶部：替换 innerHTML 不会重置 scrollTop（新内容仍够高时浏览器会保留原数值），
+  // 所以必须显式归零。只在「真正的导航」处调用（show / 艺术家分区 / 搜索），
+  // 不放进 renderContent 内部——后台专辑识别完成、music-meta.json 载入也会调它，那时不该打断用户阅读位置。
+  function scrollContentTop() {
+    var lib = document.getElementById('salt-library');
+    if (!lib) return;
+    var c = lib.querySelector('.salt-lib-content');
+    if (c) c.scrollTop = 0;
+  }
+
   function show() {
     ensureDOM();
     var wasOpen = S.open;
@@ -757,6 +770,7 @@
     hookPlayer();
     startAlbumDetect();
     render();
+    scrollContentTop();
     updateDock();
     highlightPlaying();
   }
