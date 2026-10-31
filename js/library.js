@@ -6,8 +6,11 @@
   'use strict';
   if (window.__saltLibrary) return;
 
-  // 项目仓库地址：音乐库左下角 GitHub 按钮的跳转目标
+  // 「关于」弹窗里的三个链接（写死，不走 config.js）
   var REPO_URL = 'https://github.com/lololowe/Refrain-Music';
+  var BLOG_URL = 'https://blog.lololowe.com/';
+  // 歌词 / 封面查询工具：仓库里的独立页面，随整站一起部署
+  var TOOL_URL = './tools/qq-lookup.html';
 
   var S = {
     open: false,
@@ -17,6 +20,7 @@
     artistTab: 'albums',      // 艺术家页分区：albums | songs
     covers: {},               // albumKey -> blobURL
     coversStarted: false,
+    detectStarted: false,     // 专辑/年份自动识别是否已启动
     meta: { artists: {}, albums: {} },
     query: '',
     V: null                   // 当前视图模型 {title,count,search,html}
@@ -100,6 +104,107 @@
       a.count = a.songIdx.length;
       return a;
     });
+  }
+
+  /* ---------------- 专辑 / 年份自动识别（music-list.json 未填 album 时） ---------------- */
+  // 识别结果存 localStorage：否则每次打开音乐库都要为每首歌重打一次 QQ 搜索。
+  // 负结果（查过但没匹配上）也存，用 album 空串标记，避免反复重查；
+  // 网络失败则不写缓存，下次打开还会重试。
+  var DETECT_STORE = 'refrain.qqalbum';
+
+  function detectLoad() {
+    try { return JSON.parse(localStorage.getItem(DETECT_STORE) || '{}') || {}; } catch (e) { return {}; }
+  }
+
+  function detectSave(c) {
+    try { localStorage.setItem(DETECT_STORE, JSON.stringify(c)); } catch (e) {}
+  }
+
+  // 回填专辑 key：曲库对象与 APlayer 的 audio 副本各写一份
+  // （系统媒体通知的专辑名取自 audio.album；音乐库侧仍按惯例走 srcIndex 回溯）
+  function applyAlbum(idx, key) {
+    var sg = songs() && songs()[idx];
+    if (!sg || sg.album) return;
+    sg.album = key;
+    var audios = window.HeoAudios || [];
+    for (var i = 0; i < audios.length; i++) {
+      if (audios[i] && audios[i].srcIndex === idx) { audios[i].album = key; break; }
+    }
+  }
+
+  // 识别可能把歌从「按 url 父目录归类」的专辑里搬走，当前详情页的 key 会失效：
+  // 失效就退回对应列表页（改 hash 走 applyRoute，不手动 render，避免路由与视图不同步）
+  function renderAfterDetect() {
+    if (!S.open) return;
+    if (S.view === 'album' && !buildAlbums().some(function (a) { return a.key === S.album; })) {
+      location.hash = '#/library/albums'; return;
+    }
+    if (S.view === 'artist' && !buildArtists().some(function (a) { return a.name === S.artist; })) {
+      location.hash = '#/library/artists'; return;
+    }
+    renderContent();
+  }
+
+  // 只对没填 album 的歌跑识别；全部跑完再启动封面提取（专辑 key 定型后封面才有地方挂）
+  function startAlbumDetect() {
+    if (S.detectStarted) return;
+    var list = songs();
+    if (!list) { startCoverExtract(); return; }
+    var pending = [];
+    list.forEach(function (sg, i) { if (!sg.album) pending.push(i); });
+    if (!pending.length) { startCoverExtract(); return; }
+    // localEngine 异步加载，HeoTags 可能尚未就绪：短暂重试，别一次性放弃
+    if (!(window.HeoTags && window.HeoTags.qqAlbumInfo)) {
+      S.detectTries = (S.detectTries || 0) + 1;
+      if (S.detectTries <= 100) setTimeout(startAlbumDetect, 300);
+      else startCoverExtract();
+      return;
+    }
+    S.detectStarted = true;
+
+    var cache = detectLoad();
+    var total = pending.length, done = 0, rerenderTimer = null;
+
+    function rerenderSoon() {
+      if (rerenderTimer || !S.open) return;
+      // 详情页识别过程中不重排（免得用户正在看的内容跳走），结束时统一处理
+      if (S.view === 'album' || S.view === 'artist') return;
+      rerenderTimer = setTimeout(function () { rerenderTimer = null; renderAfterDetect(); }, 600);
+    }
+
+    function finishOne() {
+      done++;
+      if (done < total) return;
+      detectSave(cache);
+      if (rerenderTimer) { clearTimeout(rerenderTimer); rerenderTimer = null; }
+      renderAfterDetect();
+      updateDock();
+      startCoverExtract();
+    }
+
+    function worker() {
+      if (!pending.length) return Promise.resolve();
+      var idx = pending.shift();
+      var sg = list[idx];
+      var ck = sg.name + '|' + sg.artist;
+      var task = (ck in cache)
+        ? Promise.resolve(cache[ck])
+        : window.HeoTags.qqAlbumInfo(sg.name, sg.artist).then(function (r) {
+            cache[ck] = (r && r.album) ? { album: r.album, year: r.year || '' } : { album: '', year: '' };
+            return cache[ck];
+          }).catch(function () { return null; });
+      return task.then(function (r) {
+        if (r && r.album) {
+          applyAlbum(idx, (r.year ? r.year + '-' : '') + r.album);
+          rerenderSoon();
+        }
+        finishOne();
+        return worker();
+      });
+    }
+
+    // 并发 2：纯元数据请求，压太高容易触发上游限流
+    for (var w = 0; w < Math.min(2, total); w++) worker();
   }
 
   /* ---------------- 封面按需提取（每专辑只取第一首） ---------------- */
@@ -310,7 +415,9 @@
       if (ch !== last) { lh += '<div class="salt-lib-letter">' + esc(ch) + '</div>'; last = ch; }
       lh += songsRow(x.i);
     });
-    if (!list.length) lh += '<div class="salt-lib-empty">没有匹配的歌曲</div>';
+    if (!list.length) lh += '<div class="salt-lib-empty">' +
+      (S.query ? '没有匹配「' + esc(S.query) + '」的歌曲<button type="button" id="salt-lib-clearq">清空搜索</button>' : '曲库里还没有歌曲') +
+      '</div>';
     // 定位当前播放歌曲的悬浮按钮
     lh += '</div><button class="salt-lib-locate" id="salt-lib-locate" title="定位到当前播放歌曲">' +
       '<svg viewBox="0 0 24 24"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.6"/></svg></button>';
@@ -332,6 +439,14 @@
     if (!lib) return;
     S.V = computeView();
     lib.querySelector('.salt-lib-content').innerHTML = S.V.html;
+    // 空状态里的「清空搜索」：重建后输入框还在，直接清值重算
+    var cq = lib.querySelector('#salt-lib-clearq');
+    if (cq) cq.addEventListener('click', function () {
+      S.query = '';
+      var el = document.getElementById('salt-lib-search');
+      if (el) el.value = '';
+      renderContent();
+    });
     // 仅更新标题里的数量，不重建搜索框
     var sp = lib.querySelector('.salt-lib-head h1 span');
     if (sp && S.V.search) sp.textContent = S.V.count;
@@ -405,7 +520,6 @@
 
   function dockHTML() {
     return '<div class="salt-dock" id="salt-dock" title="打开播放页">' +
-      '<div class="salt-dock-bar"><i id="salt-dock-played"></i></div>' +
       '<div class="salt-dock-left">' +
       '<div class="salt-dock-cover" id="salt-dock-cover"></div>' +
       '<div class="salt-dock-meta"><b id="salt-dock-name">—</b><span id="salt-dock-sub"></span></div>' +
@@ -422,6 +536,16 @@
       '</div>';
   }
 
+  // 进度镜像：把已播放比例写成 dock 上的 --played，供顶边轮廓进度线（CSS 伪元素）裁切，
+  // 与播放页底栏在 playerUI.js 里的做法一致（那边跳 APlayer 的 .aplayer-played 宽度）
+  function syncDockProgress(ap) {
+    var dock = document.getElementById('salt-dock');
+    if (!dock || !ap || !ap.audio) return;
+    var d = ap.audio.duration;
+    var pct = d ? ap.audio.currentTime / d * 100 : 0;
+    dock.style.setProperty('--played', pct.toFixed(2) + '%');
+  }
+
   function updateDock(queueIdx) {
     var ap = window.ap;
     if (!ap || !ap.list) return;
@@ -436,8 +560,8 @@
       fmtTime(ap.audio && ap.audio.duration ? ap.audio.duration : 0);
     var cov = document.getElementById('salt-dock-cover');
     if (cov) {
-      // audio 对象没有 album 字段：用 srcIndex 回到全量曲库取原始歌曲，
-      // 否则 albumKeyOf 会退化成 url 父文件夹推导（带年份前缀），与 S.covers 的 key 对不上
+      // 专辑 key 统一用 srcIndex 回到全量曲库取原始歌曲（audio 副本的 album 可能还没被识别回填），
+      // 否则 albumKeyOf 会退化成 url 父文件夹推导，与 S.covers 的 key 对不上
       var src = (a && typeof a.srcIndex === 'number' && songs()) ? songs()[a.srcIndex] : a;
       var ck = src ? albumKeyOf(src) : '';
       var p = (a && a.cover) || S.covers[ck] || (S.meta.albums && S.meta.albums[ck] && S.meta.albums[ck].pic) || '';
@@ -448,6 +572,8 @@
     if (tg) tg.innerHTML = (ap.audio && !ap.audio.paused) ? ICON_PAUSE : ICON_PLAY;
     var vol = document.getElementById('salt-dock-vol');
     if (vol && ap.audio) vol.value = ap.audio.muted ? 0 : (ap.audio.volume == null ? 1 : ap.audio.volume);
+    // 切歌时 timeupdate 还没跳第一下，这里先把进度线归零/对齐，避免残留上一首的尾巴
+    syncDockProgress(ap);
   }
 
   function hookPlayer() {
@@ -470,10 +596,7 @@
       });
     }
     ap.on('timeupdate', function () {
-      var bar = document.getElementById('salt-dock-played');
-      if (bar && ap.audio && ap.audio.duration) {
-        bar.style.width = (ap.audio.currentTime / ap.audio.duration * 100).toFixed(2) + '%';
-      }
+      syncDockProgress(ap);
       // 底栏可见时间写在 salt-dock-sub（歌手 · 时间）里，必须随 timeupdate 一起刷新
       var sub = document.getElementById('salt-dock-sub');
       if (sub && ap.list && ap.list.audios) {
@@ -492,22 +615,22 @@
     div.innerHTML =
       '<div class="salt-lib-bg"></div>' +
       '<aside class="salt-lib-side">' +
-      '<div class="salt-lib-logo">音乐库</div>' +
+      '<div class="salt-lib-logo">Refrain 音乐库</div>' +
       '<button class="salt-lib-nav active" data-nav="songs"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>歌曲</button>' +
       '<button class="salt-lib-nav" data-nav="albums"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>专辑</button>' +
       '<button class="salt-lib-nav" data-nav="artists"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>艺术家</button>' +
-      '<button class="salt-lib-github" id="salt-lib-github" title="GitHub 仓库"><svg viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.23-1.28-5.23-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.49 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.42-2.69 5.4-5.25 5.69.41.35.77 1.05.77 2.12v3.14c0 .3.21.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg><span>GitHub</span></button>' +
+      '<button class="salt-lib-about" id="salt-lib-about" title="关于"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.01"/></svg><span>关于</span></button>' +
       '</aside>' +
       '<main class="salt-lib-main"><div class="salt-lib-head"></div><div class="salt-lib-content"></div></main>' +
       dockHTML();
     document.body.appendChild(div);
 
-    // 左下角 GitHub 仓库按钮：地址写死在 REPO_URL
-    var gh = div.querySelector('#salt-lib-github');
-    if (gh) {
-      gh.addEventListener('click', function (e) {
+    // 左下角「关于」按钮：开居中弹窗（链接写死在文件顶部常量里）
+    var aboutBtn = div.querySelector('#salt-lib-about');
+    if (aboutBtn) {
+      aboutBtn.addEventListener('click', function (e) {
         e.stopPropagation();
-        window.open(REPO_URL, '_blank', 'noopener');
+        openAbout();
       });
     }
 
@@ -553,8 +676,8 @@
         if (!ap) return;
         var k = act.getAttribute('data-act');
         if (k === 'toggle') ap.toggle();
-        else if (k === 'next') ap.skipForward();
-        else if (k === 'prev') ap.skipBack();
+        else if (k === 'next') { window.heo && heo.skipAndPlay ? heo.skipAndPlay(ap, 'next') : ap.skipForward(); }
+        else if (k === 'prev') { window.heo && heo.skipAndPlay ? heo.skipAndPlay(ap, 'prev') : ap.skipBack(); }
         else if (k === 'order') { var ob = document.getElementById('heoMusic-page').querySelector('.aplayer-icon-order'); if (ob) ob.click(); }
         return;
       }
@@ -614,7 +737,7 @@
         (S.view === 'artist' && b.getAttribute('data-nav') === 'artists'));
     });
     hookPlayer();
-    startCoverExtract();
+    startAlbumDetect();
     render();
     updateDock();
     highlightPlaying();
@@ -648,12 +771,56 @@
   function available() { return !!songs(); }
   function toggle() { if (S.open) close(); else open(); }
 
+  /* ---------------- 「关于」弹窗 ---------------- */
+  // 挂在 body 上而不是音乐库容器里：避开库内的委托点击处理（点背景会路由到专辑/歌手页）
+  var aboutEl = null;
+
+  function aboutRow(label, href, text) {
+    return '<div class="salt-about-row"><span>' + esc(label) + '</span>' +
+      '<a href="' + esc(href) + '" target="_blank" rel="noopener">' + esc(text) + '</a></div>';
+  }
+
+  function buildAbout() {
+    if (aboutEl) return aboutEl;
+    var d = document.createElement('div');
+    d.className = 'salt-about';
+    d.id = 'salt-about';
+    d.setAttribute('role', 'dialog');
+    d.setAttribute('aria-modal', 'true');
+    d.setAttribute('aria-label', '关于 Refrain');
+    d.innerHTML =
+      '<div class="salt-about-mask" data-close="1"></div>' +
+      '<div class="salt-about-card">' +
+      '<button class="salt-about-close" data-close="1" aria-label="关闭">' +
+      '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
+      '<h2>关于 Refrain</h2>' +
+      '<p class="salt-about-desc">基于 APlayer 与 MetingJS 的纯静态音乐播放器：本地曲库按专辑 / 艺术家分类，封面与歌词走「外链 → 音频内嵌标签 → QQ 接口识别」三级兜底。</p>' +
+      '<div class="salt-about-links">' +
+      aboutRow('项目地址', REPO_URL, 'github.com/lololowe/Refrain-Music') +
+      aboutRow('作者博客', BLOG_URL, 'blog.lololowe.com') +
+      aboutRow('查询工具', TOOL_URL, '按歌名歌手查歌词与封面（取关联度最高的 5 条）') +
+      '</div>' +
+      '</div>';
+    // 遮罩与关闭按钮都带 data-close；卡片内部点击不关
+    d.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-close]')) closeAbout();
+    });
+    document.body.appendChild(d);
+    aboutEl = d;
+    return d;
+  }
+
+  function openAbout() { buildAbout().classList.add('open'); }
+  function closeAbout() { if (aboutEl) aboutEl.classList.remove('open'); }
+  function aboutOpen() { return !!(aboutEl && aboutEl.classList.contains('open')); }
+
   window.addEventListener('hashchange', applyRoute);
 
-  // ESC：播放页 ↔ 音乐库
+  // ESC：先关「关于」弹窗，再在播放页 ↔ 音乐库之间切换
   window.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (e.target && e.target.id === 'salt-lib-search') return; // 输入法取消组词时不触发
+    if (aboutOpen()) { closeAbout(); return; }
     if (S.open) close();
     else if (available()) open();
   });

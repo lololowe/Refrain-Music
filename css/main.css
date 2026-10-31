@@ -2005,24 +2005,27 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
   border-right: 1px solid rgba(255, 255, 255, .06);
   display: flex; flex-direction: column; gap: 4px;
 }
-.salt-lib-logo { font-size: 15px; font-weight: 700; padding: 6px 12px 16px; color: rgba(255, 255, 255, .92); }
+.salt-lib-logo { font-size: 16px; font-weight: 700; padding: 6px 12px 16px; color: rgba(255, 255, 255, .92); }
 .salt-lib-nav {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px;
   border: 0; border-radius: 8px; background: transparent; color: rgba(255, 255, 255, .65);
-  font-size: 13.5px; cursor: pointer; transition: background .15s ease, color .15s ease; text-align: left;
+  font-size: 14px; cursor: pointer; transition: background .15s ease, color .15s ease; text-align: left;
 }
 .salt-lib-nav svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .salt-lib-nav:hover { background: rgba(255, 255, 255, .06); color: #fff; }
 .salt-lib-nav.active { background: rgba(76, 194, 255, .16); color: #4cc2ff; }
-/* 左下角 GitHub 仓库按钮（地址写死在 library.js 的 REPO_URL） */
-.salt-lib-github {
+/* 左下角「关于」按钮（弹窗内容与链接写死在 library.js 顶部常量里） */
+.salt-lib-about {
   margin-top: auto; display: flex; align-items: center; gap: 10px;
   padding: 9px 12px; border: 0; border-radius: 8px; background: transparent;
   color: rgba(255, 255, 255, .65); font-size: 13.5px; cursor: pointer;
   transition: background .15s ease, color .15s ease; text-align: left;
 }
-.salt-lib-github svg { width: 17px; height: 17px; fill: currentColor; flex: none; }
-.salt-lib-github:hover { background: rgba(255, 255, 255, .06); color: #fff; }
+.salt-lib-about svg {
+  width: 17px; height: 17px; flex: none; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.salt-lib-about:hover { background: rgba(255, 255, 255, .06); color: #fff; }
 .salt-lib-main { position: relative; z-index: 1; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .salt-lib-head { display: flex; align-items: center; gap: 16px; padding: 22px 32px 10px; }
 .salt-lib-head h1 { font-size: 22px; font-weight: 700; margin: 0; }
@@ -2030,7 +2033,7 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 .salt-lib-search {
   margin-left: auto; width: 230px; padding: 8px 14px; border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .07);
-  color: #fff; font-size: 13px; outline: none;
+  color: #fff; font-size: 14px; outline: none;
 }
 .salt-lib-search::placeholder { color: rgba(255, 255, 255, .35); }
 .salt-lib-content { flex: 1; overflow-y: auto; padding: 6px 32px 130px; }
@@ -2042,14 +2045,25 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 .salt-lib-letter { font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, .4); padding: 16px 8px 6px; }
 .salt-lib-row { display: flex; align-items: center; gap: 14px; padding: 7px 10px; border-radius: 10px; cursor: pointer; transition: background .15s ease; }
 .salt-lib-row:hover { background: rgba(255, 255, 255, .07); }
-.salt-lib-num { width: 22px; text-align: right; color: rgba(255, 255, 255, .38); font-size: 13px; flex: none; }
+.salt-lib-row:hover .salt-lib-titles b { color: #fff; }
+.salt-lib-num { width: 22px; text-align: right; color: rgba(255, 255, 255, .38); font-size: 12px; flex: none; }
 .salt-lib-thumb { width: 42px; height: 42px; border-radius: 6px; overflow: hidden; flex: none; background: linear-gradient(150deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .05)); }
 .salt-lib-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .salt-lib-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .salt-lib-titles b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.salt-lib-titles span { font-size: 12px; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.salt-lib-album { width: 210px; font-size: 12.5px; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
-.salt-lib-empty { color: rgba(255, 255, 255, .4); padding: 30px 10px; }
+.salt-lib-titles span { font-size: 13px; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.salt-lib-album { width: 210px; font-size: 13px; color: rgba(255, 255, 255, .5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+/* 空状态保留框：一句说明 + 一个能点的动作，不是一行孤零零的灰字 */
+.salt-lib-empty {
+  margin: 10px 0 24px; padding: 30px 16px; border-radius: 12px;
+  background: rgba(255, 255, 255, .04); color: rgba(255, 255, 255, .6);
+  font-size: 14px; text-align: center;
+}
+.salt-lib-empty button {
+  margin-left: 10px; padding: 0; border: 0; background: none; cursor: pointer;
+  color: #4cc2ff; font-size: 14px; text-underline-offset: 3px;
+}
+.salt-lib-empty button:hover { text-decoration: underline; }
 
 /* 专辑宫格 */
 .salt-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 22px 20px; padding-top: 10px; }
@@ -2060,9 +2074,10 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
   transition: transform .25s ease, box-shadow .25s ease;
 }
 .salt-lib-card:hover .salt-lib-cover { transform: translateY(-3px); box-shadow: 0 14px 30px -12px rgba(0, 0, 0, .6); }
-.salt-lib-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.salt-lib-card b { display: block; margin-top: 9px; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.salt-lib-card span { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; font-size: 11.5px; color: rgba(255, 255, 255, .45); }
+.salt-lib-cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+.salt-lib-card:hover .salt-lib-cover img { transform: scale(1.04); }
+.salt-lib-card b { display: block; margin-top: 9px; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.salt-lib-card span { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; font-size: 12px; color: rgba(255, 255, 255, .45); }
 .salt-lib-card span i { font-style: normal; white-space: nowrap; }
 .salt-lib-card span u { text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -2086,10 +2101,11 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 .salt-lib-dcover.salt-round { border-radius: 50%; }
 .salt-lib-dcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .salt-lib-dinfo { min-width: 0; }
-.salt-lib-dinfo span { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255, 255, 255, .45); }
+/* 详情页的眉行：不用小号大写加字距（那是低分页面的共同特征），改成句式大小的灰字 */
+.salt-lib-dinfo span { font-size: 13px; color: rgba(255, 255, 255, .6); }
 .salt-lib-dinfo h1 { margin: 6px 0 10px; font-size: 30px; font-weight: 700; }
-.salt-lib-dinfo p { margin: 0 0 16px; font-size: 13.5px; color: rgba(255, 255, 255, .55); }
-.salt-lib-playall { border: 0; border-radius: 20px; padding: 10px 22px; background: #4cc2ff; color: #0b1220; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.salt-lib-dinfo p { margin: 0 0 16px; font-size: 14px; color: rgba(255, 255, 255, .55); }
+.salt-lib-playall { border: 0; border-radius: 20px; padding: 10px 22px; background: #4cc2ff; color: #0b1220; font-size: 14px; font-weight: 700; cursor: pointer; }
 .salt-lib-playall:hover { background: #63cdff; }
 
 /* 艺术家页分区 tab（专辑 / 歌曲） */
@@ -2102,7 +2118,7 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 .salt-lib-tab:hover { color: #fff; background: rgba(255, 255, 255, .06); }
 .salt-lib-tab.active { background: rgba(76, 194, 255, .16); border-color: rgba(76, 194, 255, .4); color: #4cc2ff; }
 
-/* 底部 dock：规格与播放页底栏一致（950×80、圆角 40、acrylic 34/1.35、进度贴顶 40px） */
+/* 底部 dock：规格与播放页底栏一致（950×80、圆角 40、acrylic 34/1.35、进度贴顶走弧度角） */
 .salt-dock {
   box-sizing: border-box;
   position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
@@ -2112,10 +2128,26 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; padding: 0 20px;
   cursor: pointer; z-index: 5; box-shadow: 0 18px 44px -18px rgba(0, 0, 0, .7);
 }
+/* 进度 = 胶囊顶边轮廓（与播放页底栏同一实现）：左弧度角起、右弧度角止，弧度处深浅过渡；
+   --played 由 library.js 在 timeupdate 里写进来，顶边让位给轮廓线、自身边框不再画 */
+.salt-dock { --played: 0%; --salt-pr: 40px; border-top-color: transparent; }
+/* 未播放：整条顶边轮廓，两端弧度渐隐 */
+.salt-dock::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  border-top: 2px solid rgba(255, 255, 255, .16);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--salt-pr), #000 calc(100% - var(--salt-pr)), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--salt-pr), #000 calc(100% - var(--salt-pr)), transparent 100%);
+}
+/* 已播放：同轮廓的左段，左弧度渐隐、右端硬切 */
+.salt-dock::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  border-top: 2px solid rgba(255, 255, 255, .92);
+  clip-path: inset(0 calc(100% - var(--played)) 0 0);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--salt-pr));
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--salt-pr));
+}
 .salt-dock-left { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .salt-dock-left .salt-dock-meta { flex: 1; min-width: 0; }
-.salt-dock-bar { position: absolute; top: -1px; left: 40px; right: 40px; height: 3px; border-radius: 3px 3px 0 0; background: rgba(255, 255, 255, .12); overflow: hidden; }
-.salt-dock-bar i { display: block; height: 100%; width: 0; background: rgba(255, 255, 255, .92); }
 .salt-dock-cover { width: 48px; height: 48px; border-radius: 10px; flex: none; background: linear-gradient(150deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05)) center/cover no-repeat; }
 .salt-dock-cover.has { box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .6); }
 .salt-dock-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -2152,8 +2184,8 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
   .salt-lib-side { width: 64px; padding: 14px 8px; }
   .salt-lib-logo { display: none; }
   .salt-lib-nav { justify-content: center; padding: 10px 0; font-size: 0; gap: 0; }
-  .salt-lib-github { justify-content: center; padding: 10px 0; }
-  .salt-lib-github span { display: none; }
+  .salt-lib-about { justify-content: center; padding: 10px 0; }
+  .salt-lib-about span { display: none; }
   .salt-dock-ctrl { gap: 4px; }
   .salt-dock-ctrl button { width: 30px; height: 30px; }
   #salt-dock-toggle { width: 36px; height: 36px; }
@@ -2314,3 +2346,42 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 .salt-lib-dcover img[data-broken] {
   display: none;
 }
+
+/* ==================== 「关于」弹窗 ====================
+   由 library.js 的 buildAbout() 挂在 body 下，z-index 高于音乐库（70），
+   遮罩与右上关闭按钮都带 data-close，点卡片内部不会误关 */
+.salt-about { position: fixed; inset: 0; z-index: 120; display: none; }
+.salt-about.open { display: block; }
+.salt-about-mask {
+  position: absolute; inset: 0; background: rgba(8, 10, 14, .62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.salt-about-card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(430px, calc(100vw - 40px)); padding: 26px 26px 20px;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, .1);
+  background: linear-gradient(160deg, #23262f, #191b22);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .5); color: #fff;
+}
+.salt-about.open .salt-about-mask { animation: saltAboutFade .22s ease both; }
+.salt-about.open .salt-about-card { animation: saltAboutPop .3s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes saltAboutFade { from { opacity: 0; } }
+@keyframes saltAboutPop { from { opacity: 0; transform: translate(-50%, -46%) scale(.96); } }
+.salt-about-card h2 { margin: 0 34px 10px 0; font-size: 18px; font-weight: 700; }
+.salt-about-desc { margin: 0 0 16px; font-size: 13px; line-height: 1.75; color: rgba(255, 255, 255, .58); }
+.salt-about-row {
+  display: flex; align-items: baseline; gap: 12px; padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, .07);
+}
+.salt-about-row > span { flex: none; width: 72px; font-size: 12.5px; color: rgba(255, 255, 255, .45); }
+.salt-about-row a { font-size: 13px; color: #4cc2ff; text-decoration: none; word-break: break-all; }
+.salt-about-row a:hover { text-decoration: underline; }
+.salt-about-close {
+  position: absolute; top: 12px; right: 12px; width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: transparent;
+  color: rgba(255, 255, 255, .5); cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.salt-about-close:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.salt-about-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }

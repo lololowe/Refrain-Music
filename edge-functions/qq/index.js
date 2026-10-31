@@ -134,6 +134,10 @@ async function qqSearch(w) {
       songmid: it.mid,
       albummid: it.album && it.album.mid,
       albumname: it.album && it.album.name,
+      // 发行日期（如 1997-12-06）在条目顶层，不在 album 子对象里（那里的 time_public 永远是空串）。
+      // 专辑详情类接口（pf_album_detail / pf_song_detail）被网关白名单挡住，一律 500003，
+      // 所以年份只能从这里取。
+      time_public: it.time_public,
       interval: it.interval,
       singer: (it.singer || []).map(function (s) { return { name: s.name }; }),
     };
@@ -171,6 +175,21 @@ export async function onRequest(context) {
     }
     if (act === 'lyric') {
       return json(await qqLyric(u.searchParams.get('songmid') || ''));
+    }
+    if (act === 'cover') {
+      // 封面下载：y.gtimg.cn 不发 Access-Control-Allow-Origin，页面自己 fetch 会被 CORS 挡住
+      // （<a download> 对跨域地址也无效，只会变成跳转）。这里把图片字节带着 CORS 头原样透回去，
+      // 页面才能拿到 blob 存成文件。mid 只允许字母数字并限长，避免被打成任意图床代理。
+      const mid = u.searchParams.get('mid') || '';
+      if (!/^[A-Za-z0-9]{1,64}$/.test(mid)) return json({ error: 'bad mid' }, 400);
+      const res = await fetch('https://y.gtimg.cn/music/photo_new/T002R800x800M000' + mid + '.jpg',
+        { headers: { Referer: REFERER, 'User-Agent': UA } });
+      if (!res.ok || !res.body) throw new Error('cover upstream ' + res.status);
+      const ch = Object.assign({}, h);
+      ch['Content-Type'] = (res.headers.get('Content-Type') || 'image/jpeg').split(';')[0];
+      // 图片字节大一些，允许短缓存，重复点下载不必再穿一趟上游
+      ch['Cache-Control'] = 'public, max-age=3600';
+      return new Response(res.body, { status: 200, headers: ch });
     }
     if (act === 'probe') {
       // 自诊断：两种签名前缀各打一次，带回上游状态与响应片段，用于判定哪种活着

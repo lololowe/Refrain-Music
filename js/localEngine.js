@@ -359,6 +359,9 @@ async function initLocalPlayer(audioList) {
       lrcUrl: item.lrc ? encodeNonAscii(item.lrc) : '',
       userCover: !!item.cover,
       userLrc: !!item.lrc,
+      // 专辑字段带一份：系统媒体通知的专辑名取自 audio.album；音乐库侧的专辑 key
+      // 仍按惯例走 srcIndex 回溯 songs()，不依赖这里（避免两份数据不同源）
+      album: item.album || '',
       tagsLoaded: false
     };
   });
@@ -583,28 +586,42 @@ function qqSearch(keywords) {
     });
 }
 
-// 归一化歌名：去括号后缀、去空白、小写，便于与接口结果对齐
+// 归一化歌名：去括号后缀（半角/全角）、全角冒号转半角、去空白、小写，便于与接口结果对齐
 function qqNormName(s) {
-  return String(s || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').toLowerCase();
+  return String(s || '')
+    .replace(/[(（][^)）]*[)）]/g, '')
+    .replace(/：/g, ':')
+    .replace(/\s+/g, '')
+    .toLowerCase();
 }
 
+// live / 演唱会 / 精选辑里的同名曲目不是原录音室版本，只在没有录音室候选时才接受。
+// 不降权的话，《飞机场的10：30》会被挂到 2015 年的 Mini Concert 专辑上（它排在搜索结果前面）。
+var QQ_ALT_ALBUM_RE = /(live|concert|演唱会|巡演|tour|精选|best of|greatest|hits|典藏|伴奏|karaoke|instrumental)/i;
+
 // 优先歌名+歌手双命中；歌名完全一致但歌手对不上时留作次选。
-// need：本次用途必需的字段（找封面传 'albummid'、找歌词传 'songmid'）。
+// need：本次用途必需的字段（找封面传 'albummid'、找歌词传 'songmid'、找专辑传 'albumname'）。
 // QQ 上大量 AI/翻唱条目只有 songmid 没有专辑，不跳过的话会顶在第一个人身上
 // 把后面真正带专辑封面的原版挡掉（表现为“歌词有、封面没”）。
 function qqPick(list, song, need) {
   var want = qqNormName(song.name);
   var artists = String(song.artist || '').split(/[、，,]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
-  var best = null;
+  var studio = [], alt = [];
   for (var i = 0; i < list.length; i++) {
     var it = list[i];
     if (!it || qqNormName(it.songname) !== want) continue;
     if (need && !it[need]) continue;
-    var singers = (it.singer || []).map(function (s) { return String(s.name || '').toLowerCase(); });
-    if (artists.some(function (a) { return singers.indexOf(a) >= 0; })) return it;
-    if (!best) best = it;
+    (QQ_ALT_ALBUM_RE.test(String(it.albumname || '')) ? alt : studio).push(it);
   }
-  return best;
+  function artistHit(pool) {
+    for (var k = 0; k < pool.length; k++) {
+      var singers = (pool[k].singer || []).map(function (s) { return String(s.name || '').trim().toLowerCase(); });
+      if (artists.some(function (a) { return singers.indexOf(a) >= 0; })) return pool[k];
+    }
+    return null;
+  }
+  // 歌手命中优先（录音室版本先于 live/精选），都不命中才退回第一条同名候选
+  return artistHit(studio) || artistHit(alt) || studio[0] || alt[0] || null;
 }
 
 function b64Utf8(s) {
@@ -620,6 +637,17 @@ function qqCoverUrl(name, artist) {
   });
 }
 
+// 识别专辑名 + 发行年份：搜索结果条目顶层的 time_public 就是发行日期（如 1997-12-06），
+// 一次搜索同时拿到专辑名、年份、封面 mid，不需要额外的专辑详情接口。
+function qqAlbumInfo(name, artist) {
+  return qqSearch(name + ' ' + artist).then(function (list) {
+    var it = qqPick(list, { name: name, artist: artist }, 'albumname');
+    if (!it) return null;
+    var m = /^(\d{4})/.exec(String(it.time_public || ''));
+    return { album: it.albumname, year: m ? m[1] : '', albummid: it.albummid || '' };
+  });
+}
+
 window.initLocalPlayer = initLocalPlayer;
 
 // 供音乐库按需提取内嵌封面（每专辑只取第一首，避免全量请求）
@@ -630,7 +658,9 @@ window.HeoTags = {
     });
   },
   // 音乐库专辑封面兜底：内嵌提取无结果时走 QQ 识别
-  qqCoverUrl: qqCoverUrl
+  qqCoverUrl: qqCoverUrl,
+  // 音乐库专辑/年份自动识别：music-list.json 未填 album 时按「年份-专辑名」补全
+  qqAlbumInfo: qqAlbumInfo
 };
 
 // 页面加载本文件后直接初始化单歌单播放器

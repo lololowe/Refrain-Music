@@ -48,7 +48,7 @@ function loadMusicScript() {
   } else {
     // 否则加载 localEngine.js
     var script = document.createElement('script');
-    script.src = './js/localEngine.js?v=6';
+    script.src = './js/localEngine.js?v=7';
     document.body.appendChild(script);
     local = true;
   }
@@ -287,6 +287,18 @@ var heo = {
       document.title = `${audio.name} - ${audio.artist}`;
     }
   },
+  // 切歌并自动播放。APlayer 原生 skipBack / skipForward 只做 list.switch()，
+  // 而 setAudio 收尾是 `this.paused || this.audio.play()`：暂停状态下点切歌
+  // 就成了「换了歌却不出声」。所有用户主动切歌的入口都走这里补一次 play。
+  // 不直接改 APlayer 里的 skipForward 本体：音频出错时它内部 2 秒自动跳曲也调这个方法，
+  // 改在那儿会把用户没打算听的歌强行播起来。
+  skipAndPlay: function (player, dir) {
+    var ap = player || window.ap;
+    if (!ap) return;
+    if (dir === 'prev') { if (typeof ap.skipBack === 'function') ap.skipBack(); }
+    else if (typeof ap.skipForward === 'function') ap.skipForward();
+    if (typeof ap.play === 'function') ap.play();
+  },
   // 响应 MediaSession 标准媒体交互
   setupMediaSessionHandlers: function (aplayer) {
     if ('mediaSession' in navigator) {
@@ -304,11 +316,11 @@ var heo = {
 
       // 设置上一曲下一曲按钮
       navigator.mediaSession.setActionHandler('previoustrack', () => {
-        aplayer.skipBack();
+        heo.skipAndPlay(aplayer, 'prev');
       });
 
       navigator.mediaSession.setActionHandler('nexttrack', () => {
-        aplayer.skipForward();
+        heo.skipAndPlay(aplayer, 'next');
       });
 
       // 响应进度条拖动
@@ -402,13 +414,13 @@ document.addEventListener("keydown", function (event) {
   //切换下一曲
   if (event.keyCode === 39) {
     event.preventDefault();
-    ap.skipForward();
+    heo.skipAndPlay(ap, 'next');
 
   };
   //切换上一曲
   if (event.keyCode === 37) {
     event.preventDefault();
-    ap.skipBack();
+    heo.skipAndPlay(ap, 'prev');
 
   }
   //增加音量

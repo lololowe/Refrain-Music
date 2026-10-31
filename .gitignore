@@ -1,7 +1,7 @@
 config.js
 music-list.json
 music-meta.json
-参考/
+tmp/
 # Tencent Cloud EdgeOne
 .env
 .edgeone/*
