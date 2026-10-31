@@ -26,7 +26,7 @@ Refrain 支持 URL 参数 `/?id=` + id + `&server=` + server（部署到你自�
 
 例如：
 
-**示例歌单:** https://你的域名/?id=2762963245&server=netease
+**示例歌单:** https://你的域名/?id=652135520&server=netease
 
 在线音乐模式歌单 ID 的解析由 [js/Meting.js](js/Meting.js) 内置的默认Meting API接口完成： `https://music.zhheo.com/meting-api/`。
 
@@ -38,15 +38,15 @@ Refrain 支持 URL 参数 `/?id=` + id + `&server=` + server（部署到你自�
 
 #### ID
 
-播放列表的id，可以从音乐歌单分享的链接中获取，例如`https://y.qq.com/n/ryqq/playlist/8668419170`中，id为`8668419170`
+播放列表的id，可以从音乐歌单分享的链接中获取，例如`https://y.qq.com/n/ryqq/playlist/9192285866`中，id为`9192285866`
 
 #### Server
 
-播放列表的服务商，例如`netease`（网易云音乐）,`tencent`（腾讯）,`kugou`（酷狗）,`xiami`（小米音乐）,`baidu`（百度音乐）
+播放列表的服务商。默认接口实测可用：`netease`（网易云音乐）、`tencent`（腾讯）；`kugou`（酷狗）接口层能返回数据但实际播不通，`xiami`（虾米，已停服）与 `baidu`（百度音乐）对任何 id 都返回 `unknown playlist id`，均无法加载
 
 #### Type（可选）
 
-播放列表的类型，例如`song`（单曲）, `playlist`（歌单，默认）, `album`（专辑）, `search`（搜索结果）, `artist`（歌手）
+播放列表的类型。默认接口（`music.zhheo.com/meting-api`）实测仅支持 `playlist`（歌单，默认）与 `song`（单曲）；`album`（专辑）、`search`（搜索结果）、`artist`（歌手）在上游 Meting 中虽有定义，但该接口会返回 `unknown type` / `unknown song` 而无法加载。若你自建或改用了支持更多类型的 Meting 接口（见 `config.js` 的 `window.meting_api`），可自行传入这些值
 
 #### localMusic（可选）
 

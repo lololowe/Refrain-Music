@@ -48,7 +48,7 @@ function loadMusicScript() {
   } else {
     // 否则加载 localEngine.js
     var script = document.createElement('script');
-    script.src = './js/localEngine.js?v=7';
+    script.src = './js/localEngine.js?v=8';
     document.body.appendChild(script);
     local = true;
   }
@@ -405,6 +405,9 @@ var heo = {
 
 //空格控制音乐
 document.addEventListener("keydown", function (event) {
+  // 焦点在输入框 / 下拉框里时不劫持快捷键（如「在线歌单」弹窗填 ID、音乐库搜索）
+  var _t = event.target;
+  if (_t && (_t.tagName === 'INPUT' || _t.tagName === 'SELECT' || _t.tagName === 'TEXTAREA' || _t.isContentEditable)) return;
   //暂停开启音乐
   if (event.code === "Space") {
     event.preventDefault();

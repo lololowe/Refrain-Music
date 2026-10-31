@@ -387,6 +387,11 @@ async function initLocalPlayer(audioList) {
   if (window.SaltPlayer) { window.SaltPlayer.setup(ap); }
   setupLazyTags(ap);
   setupSeekFallback(ap);
+
+  // 默认曲目随机：APlayer 构造时固定切到列表第一首（永远同一首开场），
+  // 这里在事件/懒加载都接好之后再随机切一首，覆盖那个默认起点；
+  // 封面与歌词靠 listswitch 事件照常加载，不会因此漏取。
+  if (audios.length > 1) ap.list.switch(Math.floor(Math.random() * audios.length));
 }
 
 // 封面 / 歌词按需读取：只为当前播放的曲目发起请求，切歌时才补全，

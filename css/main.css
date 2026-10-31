@@ -2385,3 +2385,41 @@ body .aplayer .aplayer-info .aplayer-controller .aplayer-time .aplayer-icon.apla
 }
 .salt-about-close:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .salt-about-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* ==================== 「在线歌单」弹窗 ====================
+   复用 .salt-about 容器（遮罩 / 卡片 / 关闭按钮），仅表单控件为新增。
+   「在线」按钮在「关于」上方：两者都用 .salt-lib-about（margin-top:auto），
+   把第二个改成小间距，让 auto 只作用在第一个上，二者一起贴到侧栏底部 */
+.salt-lib-about + .salt-lib-about { margin-top: 8px; }
+.salt-online-form { display: flex; flex-direction: column; gap: 14px; }
+.salt-online-field { display: flex; flex-direction: column; gap: 6px; }
+.salt-online-field > label { font-size: 12.5px; color: rgba(255, 255, 255, .45); }
+.salt-online-field select,
+.salt-online-field input {
+  width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 8px;
+  font-size: 13.5px; color: #fff; outline: none;
+  border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .07);
+  transition: border-color .15s ease, background .15s ease;
+}
+.salt-online-field select:focus,
+.salt-online-field input:focus { border-color: rgba(76, 194, 255, .6); background: rgba(255, 255, 255, .1); }
+.salt-online-field input::placeholder { color: rgba(255, 255, 255, .3); }
+.salt-online-field select option { background: #23262f; color: #fff; }
+.salt-online-preview {
+  font-size: 12px; line-height: 1.6; color: rgba(255, 255, 255, .5);
+  word-break: break-all; padding: 9px 11px; border-radius: 8px;
+  background: rgba(0, 0, 0, .28); border: 1px solid rgba(255, 255, 255, .06);
+}
+.salt-online-preview.empty { color: rgba(255, 255, 255, .3); }
+.salt-online-acts { display: flex; gap: 10px; justify-content: flex-end; margin-top: 2px; }
+.salt-online-btn {
+  padding: 9px 18px; border: 0; border-radius: 8px; cursor: pointer;
+  font-size: 13.5px; font-weight: 600; color: #0b0d12; background: #4cc2ff;
+  transition: filter .15s ease, background .15s ease, color .15s ease;
+}
+.salt-online-btn:hover { filter: brightness(1.08); }
+.salt-online-btn.ghost {
+  background: transparent; color: rgba(255, 255, 255, .6); font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, .14);
+}
+.salt-online-btn.ghost:hover { background: rgba(255, 255, 255, .06); color: #fff; filter: none; }

@@ -11,6 +11,14 @@
   var BLOG_URL = 'https://blog.lololowe.com/';
   // 歌词 / 封面查询工具：仓库里的独立页面，随整站一起部署
   var TOOL_URL = './tools/qq-lookup.html';
+  // 「在线歌单」弹窗可选项（服务商 / 类型），与 README「使用 URL 参数」一节一致
+  // 服务商只列默认接口实测能完整播放的：netease / tencent；
+  // kugou 接口能返回歌曲数组但用户实测在播放器里播不通，故去掉；
+  // xiami（已停服）与 baidu 对任何 id 都返回 unknown playlist id，列了也打不开
+  var ONLINE_SERVERS = [['netease', '网易云音乐'], ['tencent', '腾讯']];
+  // 类型只列默认接口实测能用的：music.zhheo.com/meting-api 对 album / search 返回
+  // unknown type、对 artist 返回 unknown song，都拿不到歌曲数组；只有 playlist / song 正常
+  var ONLINE_TYPES = [['playlist', '歌单'], ['song', '单曲']];
 
   var S = {
     open: false,
@@ -619,6 +627,7 @@
       '<button class="salt-lib-nav active" data-nav="songs"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>歌曲</button>' +
       '<button class="salt-lib-nav" data-nav="albums"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>专辑</button>' +
       '<button class="salt-lib-nav" data-nav="artists"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>艺术家</button>' +
+      '<button class="salt-lib-about" id="salt-lib-online" title="在线歌单"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg><span>在线</span></button>' +
       '<button class="salt-lib-about" id="salt-lib-about" title="关于"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.01"/></svg><span>关于</span></button>' +
       '</aside>' +
       '<main class="salt-lib-main"><div class="salt-lib-head"></div><div class="salt-lib-content"></div></main>' +
@@ -631,6 +640,15 @@
       aboutBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         openAbout();
+      });
+    }
+
+    // 「在线」按钮（关于上方）：开在线歌单弹窗，选服务商 + 填 ID 后当前页打开
+    var onlineBtn = div.querySelector('#salt-lib-online');
+    if (onlineBtn) {
+      onlineBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openOnline();
       });
     }
 
@@ -814,12 +832,103 @@
   function closeAbout() { if (aboutEl) aboutEl.classList.remove('open'); }
   function aboutOpen() { return !!(aboutEl && aboutEl.classList.contains('open')); }
 
+  /* ---------------- 「在线歌单」弹窗 ----------------
+     复用 .salt-about 容器样式；确认后按 ?id=&server=&type= 在当前页跳转，
+     由 main.js 读参数切到 Meting 在线模式 */
+  var onlineEl = null;
+
+  function onlineOptions(list, def) {
+    return list.map(function (o) {
+      return '<option value="' + esc(o[0]) + '"' + (o[0] === def ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
+    }).join('');
+  }
+
+  function buildOnline() {
+    if (onlineEl) return onlineEl;
+    var d = document.createElement('div');
+    d.className = 'salt-about salt-online';
+    d.id = 'salt-online';
+    d.setAttribute('role', 'dialog');
+    d.setAttribute('aria-modal', 'true');
+    d.setAttribute('aria-label', '在线歌单');
+    d.innerHTML =
+      '<div class="salt-about-mask" data-close="1"></div>' +
+      '<div class="salt-about-card">' +
+      '<button class="salt-about-close" data-close="1" aria-label="关闭">' +
+      '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
+      '<h2>在线歌单</h2>' +
+      '<p class="salt-about-desc">选择服务商并填写对应的 ID，确认后在新标签页打开在线歌单（由 Meting 接口解析）。</p>' +
+      '<div class="salt-online-form">' +
+      '<div class="salt-online-field"><label for="salt-online-server">服务商</label>' +
+      '<select id="salt-online-server">' + onlineOptions(ONLINE_SERVERS, 'netease') + '</select></div>' +
+      '<div class="salt-online-field"><label for="salt-online-type">类型</label>' +
+      '<select id="salt-online-type">' + onlineOptions(ONLINE_TYPES, 'playlist') + '</select></div>' +
+      '<div class="salt-online-field"><label for="salt-online-id">ID</label>' +
+      '<input id="salt-online-id" type="text" autocomplete="off" spellcheck="false" placeholder="例如 652135520"></div>' +
+      '<div class="salt-online-preview empty" id="salt-online-preview"></div>' +
+      '<div class="salt-online-acts">' +
+      '<button class="salt-online-btn ghost" type="button" data-close="1">取消</button>' +
+      '<button class="salt-online-btn" type="button" id="salt-online-go">新标签打开</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    var selServer = d.querySelector('#salt-online-server');
+    var selType = d.querySelector('#salt-online-type');
+    var inputId = d.querySelector('#salt-online-id');
+    var preview = d.querySelector('#salt-online-preview');
+
+    function targetURL() {
+      // 停在当前页面路径上（/ 或 /i 都行），main.js 只认查询参数
+      return location.origin + location.pathname +
+        '?id=' + encodeURIComponent(inputId.value.trim()) +
+        '&server=' + encodeURIComponent(selServer.value) +
+        '&type=' + encodeURIComponent(selType.value);
+    }
+    function sync() {
+      var id = inputId.value.trim();
+      preview.textContent = id ? targetURL() : '填写 ID 后显示将打开的地址';
+      preview.classList.toggle('empty', !id);
+    }
+    function go() {
+      if (!inputId.value.trim()) { inputId.focus(); sync(); return; }
+      // 新标签打开，当前页（本地曲库 / 音乐库）保持不动
+      window.open(targetURL(), '_blank', 'noopener');
+      closeOnline();
+    }
+    selServer.addEventListener('change', sync);
+    selType.addEventListener('change', sync);
+    inputId.addEventListener('input', sync);
+    inputId.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    d.querySelector('#salt-online-go').addEventListener('click', go);
+    // 遮罩 / 关闭 / 取消都带 data-close；卡片内部点击不关
+    d.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-close]')) closeOnline();
+    });
+
+    document.body.appendChild(d);
+    onlineEl = d;
+    sync();
+    return d;
+  }
+
+  function openOnline() {
+    var d = buildOnline();
+    d.classList.add('open');
+    var input = d.querySelector('#salt-online-id');
+    if (input) setTimeout(function () { input.focus(); }, 60);
+  }
+  function closeOnline() { if (onlineEl) onlineEl.classList.remove('open'); }
+  function onlineOpen() { return !!(onlineEl && onlineEl.classList.contains('open')); }
+
   window.addEventListener('hashchange', applyRoute);
 
   // ESC：先关「关于」弹窗，再在播放页 ↔ 音乐库之间切换
   window.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
+    if (e.isComposing) return; // 输入法组词中按 ESC 只取消组词，不关弹窗
     if (e.target && e.target.id === 'salt-lib-search') return; // 输入法取消组词时不触发
+    if (onlineOpen()) { closeOnline(); return; }
     if (aboutOpen()) { closeAbout(); return; }
     if (S.open) close();
     else if (available()) open();
